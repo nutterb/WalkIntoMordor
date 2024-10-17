@@ -6,10 +6,10 @@ MiddleEarth <- read.csv("MapOfMiddleEarth.csv")
 PathToMordor <- read.csv("PathToMordor.csv")
 
 Map <- 
-  ggplot(data = FullPlotData, 
+  ggplot(data = MiddleEarth, 
          mapping = aes(x = x, 
                        y = y)) + 
-  geom_tile(fill = FullPlotData$color_code) + 
+  geom_tile(fill = MiddleEarth$color_code) + 
   theme_bw() + 
   scale_x_continuous(breaks = seq(0, 1200, by = 100)) + 
   scale_y_continuous(breaks = seq(0, 700, by = 100))

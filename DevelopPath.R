@@ -239,18 +239,59 @@ Path <-
     Part25 %>% cobble_path("east"),
     Part26 %>% cobble_path("south")
   ) %>% 
-  mutate(path_order = seq_len(nrow(.)), 
-         prop = (path_order - 1) / nrow(.), 
-         distance = 1779 * prop)
-
-End <- tail(Path, 1)
-End$prop <- 1
-End$distance <- 1779
-
-Path <- bind_rows(Path, 
-                  End)
+  mutate(path_order = seq_len(nrow(.)))
 
 
+Milestone <- 
+  data.frame(Location = c("Shire", "Bree", "Rivendell", 
+                          "Lothlorien", "Rauros Falls", 
+                          "Mt. Doom"), 
+             x = c(392, 493, 727, 790, 897, 1088), 
+             y = c(594, 594, 605, 422, 202, 132), 
+             distance_to = c(0, 135, 458, 920, 1309, 1779)) %>% 
+  mutate(distance_to_next = c(diff(distance_to), 0))
+
+Path <- 
+  Path %>% 
+  left_join(Milestone, 
+            by = c("x" = "x", 
+                   "y" = "y")) %>% 
+  mutate(Milestone = zoo::na.locf(Location), 
+         distance_to_next = zoo::na.locf(distance_to_next))
+
+
+DistanceList <- 
+  list(Shire = filter(Path, Milestone == "Shire" | Location == "Bree"), 
+       Bree = filter(Path, Milestone == "Bree" | Location == "Rivendell"), 
+       Rivendell = filter(Path, Milestone == "Rivendell" | Location == "Lothlorien"), 
+       Lothlorien = filter(Path, Milestone == "Lothlorien" | Location == "Rauros Falls"), 
+       RaurosFalls = filter(Path, Milestone == "Rauros Falls" | Location == "Mt. Doom")) %>% 
+  lapply(function(d){
+    d %>% 
+      mutate(distance_to = distance_to_next[1], 
+             distance_between = get_distance(x0 = x, x1 = lag(x),
+                                             y0 = y, y1 = lag(y)), 
+             distance_between = ifelse(is.na(distance_between), 
+                                       0, distance_between), 
+             cumulative_distance = cumsum(distance_between), 
+             distance = cumulative_distance / sum(distance_between) * distance_to, 
+             distance_between = c(0, diff(distance)))
+  })
+
+DistanceList[-1] <- 
+  lapply(DistanceList[-1], 
+         function(d) tail(d, -1))
+
+Path <- 
+  bind_rows(DistanceList) %>% 
+  mutate(cumulative_distance = cumsum(distance_between), 
+         distance = cumulative_distance / sum(distance_between) * distance_to, 
+         path_order = seq_len(nrow(.))) %>% 
+  select(x, y, 
+         path_order, 
+         Location, 
+         distance_between, 
+         distance = cumulative_distance) 
 
 
 Map + 
@@ -258,19 +299,24 @@ Map +
             mapping = aes(x = x,
                           y = y),
             color = "red", 
-            linewidth = 1) #+ 
-  # coord_cartesian(xlim = c(1000, 1200),
-  #                 ylim = c(50, 250)) + 
-  # geom_vline(xintercept = c(1083, 1090),
+            linewidth = 1) 
+#+ 
+  # coord_cartesian(xlim = c(750, 850),
+  #                 ylim = c(400, 500)) +
+  # geom_vline(xintercept = c(790),
   #            color = "green",
-  #            size = 1.5) + 
-  # geom_hline(yintercept = c(125, 170), 
+  #            linewidth = 1.5) +
+  # geom_hline(yintercept = c(422),
   #            color = "green",
-  #            size = 1)
+  #            linewidth = 1)
 
 
 write.csv(Path, 
           "PathToMordor.csv", 
+          row.names = FALSE)
+
+write.csv(Milestone, 
+          "Locations.csv", 
           row.names = FALSE)
 
 write.csv(FullPlotData, 
